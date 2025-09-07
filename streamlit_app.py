@@ -246,7 +246,7 @@ with tab1:
                 st.dataframe(df_show_all.round(5))
 
 # -------------------------
-# Tab 2: Best Hour summary across all instruments (table only) - sorted by HoursUntil
+# Tab 2: Best Hour summary across all instruments (table only) - sorted by BestHourInt ascending
 # -------------------------
 with tab2:
     st.write("Scanning all instruments to find the best (most-moving) local hour per instrument...")
@@ -261,7 +261,6 @@ with tab2:
                 "BestHour_Avg%": np.nan,
                 "BestHour_Latest%": np.nan,
                 "BestHour_Diff%": np.nan,
-                "HoursUntil": np.nan,
                 "SortKey": np.nan
             })
             continue
@@ -277,7 +276,6 @@ with tab2:
                 "BestHour_Avg%": np.nan,
                 "BestHour_Latest%": np.nan,
                 "BestHour_Diff%": np.nan,
-                "HoursUntil": np.nan,
                 "SortKey": np.nan
             })
             continue
@@ -305,7 +303,6 @@ with tab2:
                 "BestHour_Avg%": np.nan,
                 "BestHour_Latest%": np.nan,
                 "BestHour_Diff%": np.nan,
-                "HoursUntil": np.nan,
                 "SortKey": np.nan
             })
             continue
@@ -330,7 +327,6 @@ with tab2:
                 "BestHour_Avg%": np.nan,
                 "BestHour_Latest%": np.nan,
                 "BestHour_Diff%": np.nan,
-                "HoursUntil": np.nan,
                 "SortKey": np.nan
             })
             continue
@@ -358,7 +354,6 @@ with tab2:
                 "BestHour_Avg%": np.nan,
                 "BestHour_Latest%": np.nan,
                 "BestHour_Diff%": np.nan,
-                "HoursUntil": np.nan,
                 "SortKey": np.nan
             })
             continue
@@ -376,15 +371,7 @@ with tab2:
         # difference
         diff_best = np.nan if np.isnan(latest_best) else (latest_best - best_hour_avg)
 
-        # compute HoursUntil relative to now in selected timezone
-        try:
-            now_local = datetime.now(pytz.timezone(timezone_option))
-            current_hour_local = now_local.hour
-            hours_until = int((best_hour_int - current_hour_local) % 24)
-        except Exception:
-            hours_until = np.nan
-
-        # sort key (kept for compatibility)
+        # sort key (kept for tie-breaker)
         sort_key = (best_hour_avg if not np.isnan(best_hour_avg) else 0.0) + (latest_best if not np.isnan(latest_best) else 0.0)
 
         rows.append({
@@ -394,22 +381,21 @@ with tab2:
             "BestHour_Avg%": round(best_hour_avg, 5),
             "BestHour_Latest%": (round(latest_best, 5) if not np.isnan(latest_best) else np.nan),
             "BestHour_Diff%": (round(diff_best, 5) if not np.isnan(diff_best) else np.nan),
-            "HoursUntil": hours_until,
             "SortKey": round(sort_key, 6)
         })
 
-    # build DataFrame & sort by HoursUntil ascending (instruments with nearest upcoming best-hour first)
+    # build DataFrame & sort by BestHourInt ascending (0 -> 1 -> 2 ...)
     summary_df = pd.DataFrame(rows)
     if not summary_df.empty:
-        # Put columns in desired order and sort
         summary_df = summary_df[[
-            "Instrument", "BestHourInt", "BestHour", "HoursUntil", "BestHour_Avg%", "BestHour_Latest%", "BestHour_Diff%", "SortKey"
+            "Instrument", "BestHourInt", "BestHour", "BestHour_Avg%", "BestHour_Latest%", "BestHour_Diff%", "SortKey"
         ]]
-        # Replace NaN HoursUntil with a large number so they go to bottom
-        summary_df["HoursUntil_sort"] = summary_df["HoursUntil"].apply(lambda x: 999 if pd.isna(x) else x)
-        summary_df = summary_df.sort_values(by=["HoursUntil_sort", "SortKey"], ascending=[True, True], na_position="last").reset_index(drop=True)
-        summary_df = summary_df.drop(columns=["HoursUntil_sort"])
+        # Replace NaN BestHourInt with a large number so they go to bottom
+        summary_df["BestHourInt_sort"] = summary_df["BestHourInt"].apply(lambda x: 999 if pd.isna(x) else int(x))
+        # sort by BestHourInt_sort then SortKey as tiebreaker
+        summary_df = summary_df.sort_values(by=["BestHourInt_sort", "SortKey"], ascending=[True, True], na_position="last").reset_index(drop=True)
+        summary_df = summary_df.drop(columns=["BestHourInt_sort"])
 
-    st.subheader("Best hour summary (per instrument) — sorted by time until best hour")
+    st.subheader("Best hour summary (per instrument) — sorted by BestHour (0 → 1 → 2 ...)")
     st.dataframe(summary_df)
-    st.caption("HoursUntil = hours from now (local timezone) until the instrument's BestHour. Sorted ascending so nearest upcoming best-hours appear first.")
+    st.caption("BestHour chosen by largest |avg| movement across selected days. Instruments with no data appear at the bottom.")

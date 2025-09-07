@@ -7,9 +7,11 @@ import numpy as np
 
 st.title("🕒 Local-Time Hourly Avg % Change — Positive / Negative / Overall")
 
-# --- Symbols: Crypto, Forex majors, indices ---
+# --- Symbols: Crypto, Forex majors, Nordic, NZD, crosses, indices ---
 symbols = {
     "BTC-USD": "BTC-USD",
+
+    # Forex majors & common crosses
     "EUR/USD": "EURUSD=X",
     "USD/JPY": "USDJPY=X",
     "GBP/USD": "GBPUSD=X",
@@ -17,6 +19,17 @@ symbols = {
     "USD/CHF": "USDCHF=X",
     "NZD/USD": "NZDUSD=X",
     "EUR/JPY": "EURJPY=X",
+    "EUR/GBP": "EURGBP=X",
+    "USD/CAD": "USDCAD=X",
+    "GBP/JPY": "GBPJPY=X",
+    "AUD/NZD": "AUDNZD=X",
+    "NZD/JPY": "NZDJPY=X",
+
+    # Nordic pairs (USD base)
+    "USD/NOK": "USDNOK=X",
+    "USD/SEK": "USDSEK=X",
+
+    # Major indices
     "S&P 500": "^GSPC",
     "Dow Jones": "^DJI",
     "Nasdaq 100": "^NDX",
@@ -32,8 +45,11 @@ symbol = symbols[symbol_name]
 period_option = st.sidebar.selectbox("Select Averaging Period (days)", [10, 30, 100])
 days_to_load = int(period_option)
 
+# default timezone set to Australia/Sydney
 timezone_option = st.sidebar.selectbox(
-    "Select Your Timezone", pytz.all_timezones, index=pytz.all_timezones.index("UTC")
+    "Select Your Timezone",
+    pytz.all_timezones,
+    index=pytz.all_timezones.index("Australia/Sydney")
 )
 
 # --- Load hourly data (defensive) ---
@@ -60,7 +76,6 @@ st.write(f"Raw data rows: {len(raw_df)} — columns: {list(raw_df.columns[:8])} 
 
 # --- Helper: extract a single-close series from possibly MultiIndex dataframe ---
 def extract_close_series(df: pd.DataFrame, symbol_key: str):
-    # If DataFrame has MultiIndex columns like ('Close','BTC-USD'), try to pull level 0 == 'Close'
     if isinstance(df.columns, pd.MultiIndex):
         lvl0 = list(df.columns.get_level_values(0))
         if "Close" in lvl0:
@@ -73,17 +88,14 @@ def extract_close_series(df: pd.DataFrame, symbol_key: str):
                 else:
                     return close_df.iloc[:, 0]
         else:
-            # try to find a column tuple that mentions 'Close' in level 0
             for col in df.columns:
                 if isinstance(col, tuple) and "Close" in col[0]:
                     return df[col]
-            # as last resort, pick any numeric column that looks like a close by name
             for col in df.columns:
                 if "close" in str(col).lower():
                     return df[col]
             raise KeyError("No Close column found in MultiIndex columns.")
     else:
-        # single-level columns
         if "Close" in df.columns:
             return df["Close"]
         for col in df.columns:
@@ -120,7 +132,6 @@ df["PctChange"] = df["Close"].pct_change() * 100
 df = df.dropna(subset=["PctChange"])
 if df.empty:
     st.warning("No rows remain after computing pct changes; cannot compute charts.")
-    # prepare empty placeholders
     avg_pos = pd.Series([0.0]*24, index=range(24))
     avg_neg = pd.Series([0.0]*24, index=range(24))
     avg_all = pd.Series([0.0]*24, index=range(24))
@@ -160,7 +171,6 @@ else:
 
     if not selected_dates:
         st.warning("No local dates found in the data for the selected period.")
-        # empty placeholders
         avg_pos = pd.Series([0.0]*24, index=range(24))
         avg_neg = pd.Series([0.0]*24, index=range(24))
         avg_all = pd.Series([0.0]*24, index=range(24))

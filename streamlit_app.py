@@ -206,22 +206,17 @@ else:
             hourly_all = pd.DataFrame(columns=range(24))
             avg_all = pd.Series([0.0]*24, index=range(24))
 
-# --- Display results (local-time charts only) ---
+# --- Display results (stacked vertically) ---
 st.markdown(f"**Instrument:** {symbol_name} — Local timezone: **{timezone_option}** — Period: **{days_to_load} days**")
 
-col1, col2, col3 = st.columns([1,1,1])
+st.subheader("Positive-Day Hourly Avg % Change (local time)")
+st.bar_chart(avg_pos)
 
-with col1:
-    st.subheader("Positive-Day Hourly Avg % Change (local time)")
-    st.bar_chart(avg_pos)
+st.subheader("Negative-Day Hourly Avg % Change (local time)")
+st.bar_chart(avg_neg)
 
-with col2:
-    st.subheader("Negative-Day Hourly Avg % Change (local time)")
-    st.bar_chart(avg_neg)
-
-with col3:
-    st.subheader("Overall Hourly Avg % Change (local time)")
-    st.bar_chart(avg_all)
+st.subheader("Overall Hourly Avg % Change (local time)")
+st.bar_chart(avg_all)
 
 # --- Show numeric tables under charts for inspection ---
 with st.expander("Show Positive-day hourly table (signed % change)"):

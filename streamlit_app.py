@@ -9,7 +9,7 @@ st.set_page_config(layout="wide")
 st.title("🕒 Local-Time Hourly Avg % Change — Positive / Negative / Overall")
 
 # ------------------------------------------------------------
-# Symbols
+# Symbols (dropdown)
 # ------------------------------------------------------------
 symbols = {
     "BTC-USD": "BTC-USD",
@@ -56,15 +56,36 @@ symbols = {
 # ------------------------------------------------------------
 # Sidebar
 # ------------------------------------------------------------
-symbol_name = st.sidebar.selectbox("Select Instrument (charts)", list(symbols.keys()))
-symbol = symbols[symbol_name]
+symbol_name_dropdown = st.sidebar.selectbox(
+    "Select Instrument (dropdown)",
+    list(symbols.keys())
+)
+
+st.sidebar.markdown("---")
+
+custom_symbol = st.sidebar.text_input(
+    "Or type any Yahoo Finance symbol",
+    placeholder="e.g. AAPL, GC=F, ^SSEC, EURUSD=X"
+)
 
 days_to_load = st.sidebar.selectbox("Select Averaging Period (days)", [10, 30, 100])
+
 timezone_option = st.sidebar.selectbox(
     "Select Your Timezone",
     pytz.all_timezones,
     index=pytz.all_timezones.index("Australia/Sydney")
 )
+
+# ------------------------------------------------------------
+# Final symbol resolution
+# ------------------------------------------------------------
+if custom_symbol.strip():
+    symbol_name = custom_symbol.strip()
+    symbol = custom_symbol.strip()
+    st.sidebar.caption(f"Using custom symbol: {symbol}")
+else:
+    symbol_name = symbol_name_dropdown
+    symbol = symbols[symbol_name]
 
 # ------------------------------------------------------------
 # Data loading
@@ -90,7 +111,6 @@ def extract_close_series(df: pd.DataFrame):
         return df["Close"]
     return df.iloc[:, 0]
 
-
 # ------------------------------------------------------------
 # Tabs
 # ------------------------------------------------------------
@@ -103,13 +123,13 @@ with tab1:
     raw_df = load_hourly(symbol, days_to_load)
 
     if raw_df.empty:
-        st.error("No data returned.")
+        st.error("No data returned for this symbol.")
         st.stop()
 
     close_series = extract_close_series(raw_df)
     df = pd.DataFrame({"Close": close_series.astype(float)})
 
-    # UTC normalize
+    # Normalize to UTC
     if df.index.tz is None:
         df.index = df.index.tz_localize("UTC")
     else:
@@ -119,7 +139,7 @@ with tab1:
     df.dropna(inplace=True)
 
     # --------------------------------------------------------
-    # Day classification (robust)
+    # Day classification (robust fallback)
     # --------------------------------------------------------
     df_utc = df.copy()
     df_utc["DateUTC"] = df_utc.index.date
@@ -137,13 +157,12 @@ with tab1:
         day_type_dict = {d: bool(v) for d, v in day_comp.items()}
 
     # --------------------------------------------------------
-    # Local time conversion
+    # Convert to local time
     # --------------------------------------------------------
     df_local = df.copy()
     df_local.index = df_local.index.tz_convert(timezone_option)
     df_local["DateLocal"] = df_local.index.date
     df_local["HourLocal"] = df_local.index.hour
-
     df_local["DayType"] = df_local["DateLocal"].map(day_type_dict)
 
     df_pos = df_local[df_local["DayType"] == True]
@@ -225,13 +244,13 @@ with tab2:
 
         rows.append({
             "Instrument": name,
-            "BestHour": f"{best_hour:02d}:00",
             "BestHourInt": best_hour,
+            "BestHour": f"{best_hour:02d}:00",
             "BestHour_Avg%": round(avg.loc[best_hour], 5)
         })
 
     summary_df = pd.DataFrame(rows)
     summary_df = summary_df.sort_values("BestHourInt", na_position="last")
 
-    st.subheader("Best Hour per Instrument")
+    st.subheader("Best Hour per Instrument (dropdown symbols only)")
     st.dataframe(summary_df, use_container_width=True)

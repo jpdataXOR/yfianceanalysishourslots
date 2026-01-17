@@ -8,7 +8,7 @@ import numpy as np
 st.set_page_config(layout="wide")
 st.title("🕒 Local-Time Hourly Avg % Change — Positive / Negative / Overall")
 
-# --- Symbols: Crypto, Forex majors, Nordic, NZD, crosses, indices ---
+# --- Default Symbols: Crypto, Forex majors, Nordic, NZD, crosses, indices, commodities ---
 symbols = {
     "BTC-USD": "BTC-USD",
     # Forex majors & common crosses
@@ -33,7 +33,20 @@ symbols = {
     "Nasdaq 100": "^NDX",
     "FTSE 100": "^FTSE",
     "DAX": "^GDAXI",
-    "Nikkei 225": "^N225"
+    "Nikkei 225": "^N225",
+    "ASX 200": "^AXJO",
+    "S&P/TSX": "^GSPTSE",
+    "Hang Seng": "^HSI",
+    "VIX": "^VIX",
+    # Commodities (Yahoo Finance futures tickers)
+    "Gold (GC)": "GC=F",
+    "Silver (SI)": "SI=F",
+    "WTI Crude (CL)": "CL=F",
+    "Brent Crude (BZ)": "BZ=F",
+    "Natural Gas (NG)": "NG=F",
+    "Copper (HG)": "HG=F",
+    "Platinum (PL)": "PL=F",
+    "Palladium (PA)": "PA=F",
 }
 
 # --- Sidebar selections ---
@@ -49,6 +62,42 @@ timezone_option = st.sidebar.selectbox(
     pytz.all_timezones,
     index=pytz.all_timezones.index("Australia/Sydney")
 )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Add custom Yahoo Finance symbol(s)**")
+st.sidebar.markdown("You can add new symbols to analyze. Provide either `Label=SYMBOL` or just the `SYMBOL`. For multiple entries separate with commas. Example: `MyGold=GC=F, BTC-TEST=BTC-USD, EURUSD=X`.")
+custom_input = st.sidebar.text_input("Custom symbols (comma-separated)", value="")
+
+# Parse custom input and append to symbols dict (do not overwrite existing keys; add with suffix if necessary)
+if custom_input:
+    entries = [e.strip() for e in custom_input.split(",") if e.strip()]
+    for ent in entries:
+        if "=" in ent and ent.count("=") >= 1 and not ent.upper().endswith("=F"):
+            # allow user to enter Label=SYMBOL form OR symbol that contains '=' like GC=F
+            # We'll split on the first '=' to allow symbol values that themselves have '=' (e.g. GC=F)
+            parts = ent.split("=", 1)
+            label = parts[0].strip()
+            symbol_val = parts[1].strip()
+            # if there was more (like GC=F) we already handled by splitting only first '='
+        elif "=" in ent and ent.upper().endswith("=F"):
+            # if user provides only a Yahoo style symbol like GC=F we treat label same as symbol
+            label = ent
+            symbol_val = ent
+        else:
+            # no explicit label, assume the token is the symbol and use it also as label
+            label = ent
+            symbol_val = ent
+
+        # ensure uniqueness of label in symbols dict
+        orig_label = label
+        i = 1
+        while label in symbols:
+            label = f"{orig_label} (custom {i})"
+            i += 1
+        symbols[label] = symbol_val
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Pro-tip: For index/commodity tickers use Yahoo " "tickers like GC=F (gold futures), CL=F (WTI crude) and ^GSPC (S&P 500).")
 
 # --- Load hourly data (defensive) ---
 @st.cache_data(ttl=1800)
@@ -80,6 +129,7 @@ def extract_close_series(df: pd.DataFrame, symbol_key: str):
                 else:
                     return close_df.iloc[:, 0]
         else:
+            # fallback: look for any column name containing 'close'
             for col in df.columns:
                 if isinstance(col, tuple) and "Close" in col[0]:
                     return df[col]
@@ -93,6 +143,9 @@ def extract_close_series(df: pd.DataFrame, symbol_key: str):
         for col in df.columns:
             if "close" in str(col).lower():
                 return df[col]
+        # If there's only one column (like some ticker responses) use it
+        if len(df.columns) == 1:
+            return df.iloc[:, 0]
         raise KeyError("No Close column found in dataframe columns.")
 
 # --- Tabs: charts and best-hour summary ---
